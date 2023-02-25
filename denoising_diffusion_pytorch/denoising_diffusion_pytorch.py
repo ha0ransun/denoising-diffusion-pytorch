@@ -1204,10 +1204,7 @@ class Trainer(object):
         self.image_size = diffusion_model.image_size
 
         # dataset and dataloader
-        if folder == 'cifar10':
-            self.ds = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
-        else:
-            raise NotImplementedError
+        self.ds = Dataset(folder, self.image_size, augment_horizontal_flip = augment_horizontal_flip, convert_image_to = convert_image_to)
         dl = DataLoader(self.ds, batch_size=train_batch_size, shuffle=True, pin_memory=True, num_workers=cpu_count())
 
         dl = self.accelerator.prepare(dl)
@@ -1278,7 +1275,7 @@ class Trainer(object):
 
                 total_loss = 0.
                 for _ in range(self.gradient_accumulate_every):
-                    data = next(self.dl)[0].to(device)
+                    data = next(self.dl).to(device)
 
                     with self.accelerator.autocast():
                         loss = self.model(data)

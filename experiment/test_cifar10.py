@@ -1,7 +1,24 @@
 import torch
+import os
 import torchvision
-import torchvision.datasets as datasets
+import torchvision.transforms as T
+from torchvision import utils
+from PIL import Image
 from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer, GaussianProcessDiffusion
+
+
+def get_dataset(name):
+    if name == "cifar-10":
+        if os.path.exists('../data/cifar-10'):
+            pass
+        else:
+            os.makedirs('../data/cifar-10')
+            dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
+            for i in range(len(dataset)):
+                img, _ = dataset[i]
+                utils.save_image([img], f'../data/cifar-10/img-{i+1}.png')
+    else:
+        raise NotImplementedError
 
 
 def train_gaussian():
@@ -17,9 +34,10 @@ def train_gaussian():
         loss_type='l1'    # L1 or L2
     )
 
+    get_dataset('cifar-10')
     trainer = Trainer(
         diffusion,
-        'cifar10',
+        '../data/cifar-10',
         train_batch_size=16,
         train_lr=8e-5,
         train_num_steps=700,  # total training steps
