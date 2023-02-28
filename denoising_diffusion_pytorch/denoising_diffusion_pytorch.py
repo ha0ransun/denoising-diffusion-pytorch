@@ -473,6 +473,7 @@ class GaussianDiffusion(nn.Module):
         self,
         model,
         image_size,
+        kernel=None,
         timesteps=1000,
         sampling_timesteps=None,
         loss_type='l1',
@@ -493,6 +494,7 @@ class GaussianDiffusion(nn.Module):
         self.self_condition = self.model.self_condition
 
         self.image_size = image_size
+        self.kernel = kernel
 
         self.objective = objective
 
@@ -634,7 +636,11 @@ class GaussianDiffusion(nn.Module):
         b, *_, device = *x.shape, x.device
         batched_times = torch.full((b,), t, device = x.device, dtype = torch.long)
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = True)
-        noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
+        if self.kernel is None:
+            noise = torch.randn_like(x) if t > 0 else 0.  # no noise if t == 0
+        else:
+            x_shape = x.shape
+            noise = (torch.randn_like(x).view(b, -1) @ self.kernel).view(x_shape) if t > 0 else 0.  # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
 
@@ -745,7 +751,9 @@ class GaussianDiffusion(nn.Module):
     def p_losses(self, x_start, t, noise = None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))
-
+        if self.kernel is not None:
+            x_shape = noise.shape
+            noise = (noise.view(b, -1) @ self.kernel).view(x_shape)
         # noise sample
 
         x = self.q_sample(x_start=x_start, t=t, noise=noise)
@@ -787,67 +795,6 @@ class GaussianDiffusion(nn.Module):
 
         img = self.normalize(img)
         return self.p_losses(img, t, *args, **kwargs)
-
-
-class GPDiffusion(GaussianDiffusion):
-    def __init__(
-        self,
-        model,
-        image_size,
-        kernel,
-        timesteps=1000,
-        sampling_timesteps=None,
-        loss_type='l1',
-        objective='pred_noise',
-        beta_schedule='sigmoid',
-        schedule_fn_kwargs=dict(),
-        p2_loss_weight_gamma=0., # p2 loss weight, from https://arxiv.org/abs/2204.00227 - 0 is equivalent to weight of 1 across time - 1. is recommended
-        p2_loss_weight_k=1,
-        ddim_sampling_eta=0.,
-        auto_normalize=True
-    ):
-        super().__init__(
-            model=model,
-            image_size=image_size,
-            timesteps=timesteps,
-            sampling_timesteps=sampling_timesteps,
-            loss_type=loss_type,
-            objective=objective,
-            beta_schedule=beta_schedule,
-            schedule_fn_kwargs=schedule_fn_kwargs,
-            p2_loss_weight_gamma=p2_loss_weight_gamma,
-            # p2 loss weight, from https://arxiv.org/abs/2204.00227 - 0 is equivalent to weight of 1 across time - 1. is recommended
-            p2_loss_weight_k=p2_loss_weight_k,
-            ddim_sampling_eta=ddim_sampling_eta,
-            auto_normalize=auto_normalize
-        )
-        self.kernel = kernel
-
-    @torch.no_grad()
-    def p_sample(self, x, t: int, x_self_cond=None):
-        b, *_, device = *x.shape, x.device
-        batched_times = torch.full((b,), t, device=x.device, dtype=torch.long)
-        model_mean, _, model_log_variance, x_start = self.p_mean_variance(x=x, t=batched_times, x_self_cond=x_self_cond,
-                                                                          clip_denoised=True)
-        if self.kernel is None:
-            noise = torch.randn_like(x) if t > 0 else 0.  # no noise if t == 0
-        else:
-            x_shape = x.shape
-            noise = (torch.randn_like(x).view(b, -1) @ self.kernel).view(x_shape) if t > 0 else 0.  # no noise if t == 0
-        pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
-        return pred_img, x_start
-
-    def q_sample(self, x_start, t, noise=None):
-        if self.kernel is None:
-            noise = default(noise, lambda: torch.randn_like(x_start))
-        else:
-            x_shape = x_start.shape
-            noise = (default(noise, lambda: torch.randn_like(x_start)).view(x_shape[0], -1) @ self.kernel).view(x_shape)
-
-        return (
-            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-            extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
-        )
 
 
 # dataset classes
