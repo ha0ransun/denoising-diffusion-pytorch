@@ -494,7 +494,6 @@ class GaussianDiffusion(nn.Module):
         self.self_condition = self.model.self_condition
 
         self.image_size = image_size
-        self.kernel = kernel
 
         self.objective = objective
 
@@ -531,6 +530,10 @@ class GaussianDiffusion(nn.Module):
 
         register_buffer = lambda name, val: self.register_buffer(name, val.to(torch.float32))
 
+        if kernel is None:
+            self.kernel = None
+        else:
+            register_buffer('kernel', kernel)
         register_buffer('betas', betas)
         register_buffer('alphas_cumprod', alphas_cumprod)
         register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
