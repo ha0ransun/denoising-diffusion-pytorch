@@ -651,9 +651,9 @@ class GaussianDiffusion(nn.Module):
     def p_sample_loop(self, shape, return_all_timesteps = False):
         batch, device = shape[0], self.betas.device
 
-        img = torch.randn(shape, device = device)
+        img = torch.randn(shape, device=device)
         if self.kernel is not None:
-            img = img @ self.kernel
+            img = (img.view(batch, -1) @ self.kernel).view(shape)
         imgs = [img]
 
         x_start = None
