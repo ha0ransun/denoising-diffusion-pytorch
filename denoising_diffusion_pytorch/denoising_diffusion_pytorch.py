@@ -652,6 +652,8 @@ class GaussianDiffusion(nn.Module):
         batch, device = shape[0], self.betas.device
 
         img = torch.randn(shape, device = device)
+        if self.kernel:
+            img = img @ self.kernel
         imgs = [img]
 
         x_start = None
