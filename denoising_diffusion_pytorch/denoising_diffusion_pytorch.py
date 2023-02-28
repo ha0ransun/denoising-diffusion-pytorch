@@ -950,7 +950,7 @@ class Trainer(object):
         device = accelerator.device
 
         with tqdm(initial=self.step, total=self.train_num_steps, disable = not accelerator.is_main_process) as pbar:
-
+            loss_tracker = []
             while self.step < self.train_num_steps:
 
                 total_loss = 0.
@@ -964,6 +964,7 @@ class Trainer(object):
 
                     self.accelerator.backward(loss)
 
+                loss_tracker.append(total_loss)
                 accelerator.clip_grad_norm_(self.model.parameters(), 1.0)
                 pbar.set_description(f'loss: {total_loss:.4f}')
 
@@ -985,8 +986,10 @@ class Trainer(object):
                         with torch.no_grad():
                             milestone = self.step // self.save_and_sample_every
                             batches = num_to_groups(self.num_samples, self.batch_size)
+                            print(f'### current average loss: {sum(loss_tracker) / len(loss_tracker):.4f} ###')
                             all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
 
+                        loss_tracker = []
                         all_images = torch.cat(all_images_list, dim = 0)
                         utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
                         self.save(milestone)
