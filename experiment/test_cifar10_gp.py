@@ -18,7 +18,8 @@ def get_dataset(name):
                 utils.save_image([img], f'../data/cifar-10/img-{i+1}.png')
     else:
         raise NotImplementedError
-    kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+    # kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+    kernel = torch.cov(2 * torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
     v, P = torch.linalg.eigh(kernel)
     return P @ torch.diag(v ** 0.5) @ P.T
 
@@ -43,7 +44,7 @@ def train_gp():
         '../data/cifar-10',
         train_batch_size=128,
         train_lr=2e-4,
-        train_num_steps=70000,  # total training steps
+        train_num_steps=200000,  # total training steps
         save_and_sample_every=2000,
         gradient_accumulate_every=1,  # gradient accumulation steps
         ema_decay=0.9999,  # exponential moving average decay
