@@ -9,10 +9,11 @@ from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
 def get_kernel(name):
     if name == "cifar-10":
         dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
-        # kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
-        kernel = torch.cov(2 * torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+        kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+        kernel = (kernel + torch.diag(torch.diag(kernel))) / 2.
+        # kernel = torch.cov(2 * torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
         v, P = torch.linalg.eigh(kernel)
-        return P @ torch.diag(v ** 0.5) @ P.T
+        return P @ torch.diag(v ** 0.5) @ P.T, P @ torch.diag(v ** -1) @ P.T
     else:
         raise NotImplementedError
 
@@ -23,13 +24,14 @@ def train_gp():
         dim_mults=(1, 2, 2, 2)
     )
 
-    kernel = get_kernel('cifar-10')
+    kernel, k_inv = get_kernel('cifar-10')
     diffusion = GaussianDiffusion(
         model,
         kernel=kernel,
+        k_inv=k_inv,
         image_size=32,
         timesteps=1000,   # number of steps
-        loss_type='l1'    # L1 or L2
+        loss_type='K'    # L1 or L2 or K
     )
 
     trainer = Trainer(
@@ -42,7 +44,7 @@ def train_gp():
         gradient_accumulate_every=1,  # gradient accumulation steps
         ema_decay=0.9999,  # exponential moving average decay
         amp=False,  # turn on mixed precision
-        results_folder='./gp_results'
+        results_folder='./k_results'
     )
     trainer.train()
 

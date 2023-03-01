@@ -474,6 +474,7 @@ class GaussianDiffusion(nn.Module):
         model,
         image_size,
         kernel=None,
+        k_inv=None,
         timesteps=1000,
         sampling_timesteps=None,
         loss_type='l1',
@@ -532,8 +533,10 @@ class GaussianDiffusion(nn.Module):
 
         if kernel is None:
             self.kernel = None
+            self.k_inv = None
         else:
             register_buffer('kernel', kernel)
+            register_buffer('k_inv', k_inv)
         register_buffer('betas', betas)
         register_buffer('alphas_cumprod', alphas_cumprod)
         register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
@@ -548,9 +551,10 @@ class GaussianDiffusion(nn.Module):
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
 
-        posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
+        posterior_variance = betas # * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
 
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
+        # directly use beta as the variance
 
         register_buffer('posterior_variance', posterior_variance)
 
@@ -753,6 +757,12 @@ class GaussianDiffusion(nn.Module):
         else:
             raise ValueError(f'invalid loss type {self.loss_type}')
 
+    def k_loss(self, output, target, reduction='none'):
+        diff = (output - target).view(output.shape[0], -1)
+        assert self.k_inv is not None
+        loss = ((diff @ self.k_inv) * diff).sum(-1)
+        return loss
+
     def p_losses(self, x_start, t, noise = None):
         b, c, h, w = x_start.shape
         noise = default(noise, lambda: torch.randn_like(x_start))
@@ -787,8 +797,11 @@ class GaussianDiffusion(nn.Module):
         else:
             raise ValueError(f'unknown objective {self.objective}')
 
-        loss = self.loss_fn(model_out, target, reduction = 'none')
-        loss = reduce(loss, 'b ... -> b (...)', 'mean')
+        if self.loss_type == 'K' and self.k_inv is not None:
+            loss = self.k_loss(model_out, target)
+        else:
+            loss = self.loss_fn(model_out, target, reduction = 'none')
+            loss = reduce(loss, 'b ... -> b (...)', 'mean')
 
         loss = loss * extract(self.p2_loss_weight, t, loss.shape)
         return loss.mean()
