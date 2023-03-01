@@ -760,7 +760,7 @@ class GaussianDiffusion(nn.Module):
     def k_loss(self, output, target, reduction='none'):
         diff = (output - target).view(output.shape[0], -1)
         assert self.k_inv is not None
-        loss = ((diff @ self.k_inv) * diff).sum(-1)
+        loss = ((diff @ self.k_inv) * diff).mean(-1)
         return loss
 
     def p_losses(self, x_start, t, noise = None):
