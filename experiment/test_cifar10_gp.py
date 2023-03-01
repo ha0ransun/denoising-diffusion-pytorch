@@ -6,22 +6,15 @@ from torchvision import utils
 from denoising_diffusion_pytorch import Unet, GaussianDiffusion, Trainer
 
 
-def get_dataset(name):
+def get_kernel(name):
     if name == "cifar-10":
-        if os.path.exists('../data/cifar-10'):
-            dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
-        else:
-            os.makedirs('../data/cifar-10')
-            dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
-            for i in range(len(dataset)):
-                img, _ = dataset[i]
-                utils.save_image([img], f'../data/cifar-10/img-{i+1}.png')
+        dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
+        # kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+        kernel = torch.cov(2 * torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
+        v, P = torch.linalg.eigh(kernel)
+        return P @ torch.diag(v ** 0.5) @ P.T
     else:
         raise NotImplementedError
-    # kernel = torch.corrcoef(torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
-    kernel = torch.cov(2 * torch.stack([dataset[j][0].view(-1) for j in range(len(dataset))], 1))
-    v, P = torch.linalg.eigh(kernel)
-    return P @ torch.diag(v ** 0.5) @ P.T
 
 
 def train_gp():
@@ -30,7 +23,7 @@ def train_gp():
         dim_mults=(1, 2, 2, 2)
     )
 
-    kernel = get_dataset('cifar-10')
+    kernel = get_kernel('cifar-10')
     diffusion = GaussianDiffusion(
         model,
         kernel=kernel,
@@ -42,7 +35,7 @@ def train_gp():
     trainer = Trainer(
         diffusion,
         '../data/cifar-10',
-        train_batch_size=128,
+        train_batch_size=512,
         train_lr=2e-4,
         train_num_steps=200000,  # total training steps
         save_and_sample_every=2000,
@@ -56,3 +49,4 @@ def train_gp():
 
 if __name__ == "__main__":
     train_gp()
+
