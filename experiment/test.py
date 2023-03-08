@@ -28,13 +28,13 @@ def get_entropy_lb(distance, sigma):
 
 
 def get_all_entropy(x, num, batch_size):
-    all_entropy = torch.zeros(num)
+    all_entropy = torch.zeros(num, device=x.device)
     for i in tqdm(range(int(np.ceil(x.shape[0] / batch_size)))):
         cur_x = x[i * batch_size: (i + 1) * batch_size]
-        cur_d = torch.cdist(cur_x, x) ** 2
+        cur_d = (torch.cdist(cur_x, x) ** 2)
         for j in range(num):
             sigma = (j + 1) / num
-            all_entropy[j] += get_entropy_lb(cur_d, sigma)
+            all_entropy[j] += get_entropy_lb(cur_d, sigma).float()
     all_entropy /= x.shape[0]
     return all_entropy
 
@@ -45,9 +45,10 @@ if __name__ == '__main__':
     x = torch.tensor(dataset.data).to(device)
     x = x.reshape(x.shape[0], -1)
     x = x / 255 * 2. - 1.
+    x = x.double()
     num = 50
     # res = torch.arange(200) + torch.randn(num)
-    res = get_all_entropy(x, num=num, batch_size=2000)
+    res = get_all_entropy(x, num=num, batch_size=1000)
     with open('results/entropy.pkl', 'wb') as file:
         pickle.dump(res, file)
     plt.plot(range(num), res)
