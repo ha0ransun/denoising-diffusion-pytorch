@@ -22,8 +22,8 @@ def get_entropy(x, weight, sigma):
 
 
 def get_entropy_lb(distance, sigma):
-    distance = distance * math.sqrt(1 - sigma ** 2)
-    h = torch.logsumexp(- distance / (4 * sigma ** 2), -1).sum()
+    distance = distance * (1 - sigma ** 2)
+    h = torch.logsumexp(torch.clamp(- distance / (4 * sigma ** 2), min=-200.), -1).sum()
     return h
 
 
@@ -31,7 +31,7 @@ def get_all_entropy(x, num, batch_size):
     all_entropy = torch.zeros(num, device=x.device)
     for i in tqdm(range(int(np.ceil(x.shape[0] / batch_size)))):
         cur_x = x[i * batch_size: (i + 1) * batch_size]
-        cur_d = (torch.cdist(cur_x, x) ** 2)
+        cur_d = (torch.cdist(cur_x, x) ** 2) * 4 / 255 ** 2
         for j in range(num):
             sigma = (j + 1) / num
             all_entropy[j] += get_entropy_lb(cur_d, sigma).float()
@@ -44,11 +44,10 @@ if __name__ == '__main__':
     dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=T.ToTensor())
     x = torch.tensor(dataset.data).to(device)
     x = x.reshape(x.shape[0], -1)
-    x = x / 255 * 2. - 1.
     x = x.double()
-    num = 50
+    num = 1000
     # res = torch.arange(200) + torch.randn(num)
-    res = get_all_entropy(x, num=num, batch_size=1000)
+    res = get_all_entropy(x, num=num, batch_size=1000).cpu().numpy()
     with open('results/entropy.pkl', 'wb') as file:
         pickle.dump(res, file)
     plt.plot(range(num), res)
